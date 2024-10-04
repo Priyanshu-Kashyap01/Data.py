@@ -1,0 +1,172 @@
+import streamlit as st
+import plotly.express as px
+import pandas as pd
+import os
+import warnings
+warnings.filterwarnings('ignore')
+st.set_page_config(page_title = "University_18",page_icon = ":bar_chart",layout = "wide")
+st.title ( " :bar_chart: University_18")
+st.markdown('<style>div.block-container{padding-top:2rem;}</style>', unsafe_allow_html=True)
+
+fl = st.file_uploader(":file_folder: Upload a file",type = (["csv","txt","xlsx","xls"]))
+if fl is not None:
+    filename = fl.name
+    st.write(filename)
+    df = pd.read_csv(filename, encoding="ISO-8859-1")
+
+else:
+    os.chdir(r"C:\Users\IT\Desktop\New folder\CSV File")
+    df = pd.read_csv("DBUStudent-data.csv",encoding="ISO-8859-1")
+
+Col1, Col2 = st.columns((2))
+df["Approval Date"] = pd.to_datetime(df["Approval Date"])
+
+#Getting the mind and max date 
+startdate = pd.to_datetime(df["Approval Date"]).min()
+enddate = pd.to_datetime(df["Approval Date"]).max()
+
+with Col1:
+    date1 =pd.to_datetime(st.date_input("Start Date", startdate))
+
+with Col2:
+
+       date2 =pd.to_datetime(st.date_input("End Date", enddate))
+
+df= df[(df["Approval Date"] >= date1) & (df["Approval Date"] <= date2)].copy()
+
+st.sidebar.header("Choose Your filter")
+region = st.sidebar.multiselect("Pick Your Region", df["Region"].unique())
+
+if not region:
+     df2 = df.copy()
+
+else:
+     df2 = df[df["Region"].isin(region)]
+
+#Create For The State
+
+Country = st.sidebar.multiselect("Pick Your Country",df2["Country"].unique())
+if not Country:
+     df3 = df2.copy()
+
+else:
+     df3 = df2[df2["Country"].isin(Country)]
+
+#Create The City
+City = st.sidebar.multiselect("Pick Your City", df3["City"].unique())
+
+#Filter the data based on Region, State and City
+if not region and not Country and not City:
+     filtere_df = df
+elif not Country and not City:
+     filtere_df = df[df["Region"].isin(region)]
+elif not region and not City:
+     filtere_df = df[df["Country"].isin(Country)]
+elif Country and City:
+     filtere_df = df3[df["State"].isin(Country) & df3["City"].isin(City)]
+
+elif region and City:
+     filtere_df = df3[df["Region"].isin(region) & df3["City"].isin(City)]
+
+elif region and Country:
+     filtere_df = df3[df["Region"].isin(region) & df3["State"].isin(Country)]
+
+elif City:
+     filtere_df = df3[["City"].isin(City)]
+
+else:
+     filtere_df = df3[df3["Region"].isin(region) & df3["State"].isin(Country) & df3["City"]. isin(City)]
+
+Gender_df = filtere_df.groupby(by = ["Gender"],as_index = False)["Total Fee"].sum()
+
+Gender_df = filtere_df.groupby(by = ["Gender"],as_index = False)["Total Fee"].sum()
+
+with Col1:
+     st.subheader("Category wise sales")
+     fig = px.bar(Gender_df, x = "Gender", y = "Total Fee",text = ['${:,.2f}'.format (x) for x in Gender_df ["Total Fee"]],
+     template = "seaborn")
+     st.plotly_chart(fig,use_container_width=True,height = 200)
+
+with Col2:
+     st.subheader("Region wise Sales")
+     fig = px.pie(filtere_df, values= "Total Fee", names= "University", hole = 0.5)
+     fig.update_traces(text = filtere_df ["University"],textposition = "outside")
+     st.plotly_chart(fig,use_container_width=True)
+
+cl1, cl2 = st.columns((2))
+with cl1:
+     with st.expander("Gender_ViewData"):
+      st.write(Gender_df .style.background_gradient (cmap ="Blues"))
+     csv = Gender_df.to_csv( index = False).encode ('utf-8')
+     st.download_button("Download Data",data= csv, file_name="category.csv", mime="text/csv",
+     help= 'Click here to download the data as a CSV file')
+
+with cl2:
+     with st.expander("University_ViewData"):
+      University = filtere_df.groupby(by="University", as_index = False)["Total Fee"].sum()
+      st.write(University.style.background_gradient (cmap ="Oranges"))
+     csv = University.to_csv( index = False).encode ('utf-8')
+     st.download_button("Download Data",data= csv, file_name="region.csv", mime="text/csv",
+     help= 'Click here to download the data as a CSV file')
+
+filtere_df["month_year"] = filtere_df["Approval Date"].dt.to_period("M")
+st.subheader('Time Series Analysis')
+
+linechart = pd.DataFrame (filtere_df.groupby(filtere_df["month_year"].dt.strftime("%Y : %b"))["Total Fee"].sum()).reset_index()
+fig2 = px.line(linechart, x = "month_year", y = "Total Fee", labels = {"Total Fee" : "Amount"},height=500, width = 1000, template="gridon")
+st.plotly_chart(fig2,use_container_width=True)
+
+
+#Download Data button
+with st.expander("View Data of TimeSeries:"):
+     st.write(linechart.T.style.background_gradient(cmap="Blues"))
+     Csv = linechart.to_csv(index=False).encode("utf-8")
+     st.download_button('Download Data', data = csv, file_name = "TimeSeries.csv",mime ='text/csv')
+
+#Create a treem based on Region, Category, Sub-category
+
+st.subheader("Hierarchical view of Sales using TreeMap")
+fig3 = px.treemap(filtere_df, path = ["Account Status","Gender","Enrollment Month"],values = "Total Fee", hover_data =["Total Fee"],
+                  color = "Enrollment Month")
+
+fig3.update_layout(width = 800, height = 650)
+st.plotly_chart(fig3, use_container_width = True)
+
+
+chart1, chart2 = st.columns((2))
+
+with chart1:
+     st.subheader('Program Status wise Sales')
+     fig = px.pie(filtere_df, values = "Total Fee", names = "Program Status", template = "plotly_dark")
+     fig.update_traces(text = filtere_df["Program Status"], textposition = "inside")
+     st.plotly_chart(fig,use_container_width=True)
+
+with chart2:
+     st.subheader('Enrollment Month wise Sales')
+     fig = px.pie(filtere_df, values = "Total Fee", names = "Enrollment Month", template = "plotly_dark")
+     fig.update_traces(text = filtere_df["Enrollment Month"], textposition = "inside")
+     st.plotly_chart(fig,use_container_width=True)
+
+import plotly.figure_factory as ff
+st.subheader(":point_right: Month wise Sub-Category Sales summary")
+with st.expander("Summary_Table"):
+     df_sample = df[0:197][["City","Program Status","University","Enrollment Year","Total Fee"]]
+     fig = ff.create_table(df_sample, colorscale = "Cividis")
+     st.plotly_chart(fig, use_container_width = True)
+
+
+
+st.markdown("Month-wise Sub-Category Sales Table")
+filtere_df["Enrollment Month"] = filtere_df["Approval Date"].dt.month_name()
+sub_category_year = pd.pivot_table(data=filtere_df, values="Total Fee", index="Program Status", columns="Enrollment Month")
+st.write(sub_category_year.style.background_gradient(cmap="Blues"))
+
+
+
+
+
+
+
+
+
+
